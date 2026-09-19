@@ -5,6 +5,8 @@ import type { Database } from './db';
 import {
     getAllGames,
     getAllGameIds,
+    getCatalogSummary,
+    getFilteredGames,
     getGameById,
 } from './games';
 
@@ -62,5 +64,54 @@ describe('games data-access helpers', () => {
     it('returns null for a non-existent game', async () => {
         await seedGames(db, 2);
         expect(await getGameById(db, 99999)).toBeNull();
+    });
+
+    it('filters games by category and publisher', async () => {
+        const categoryRows = await db
+            .insert(categories)
+            .values([
+                { name: 'Strategy', description: 'strategy' },
+                { name: 'Puzzle', description: 'puzzle' },
+            ])
+            .returning({ id: categories.id, name: categories.name });
+        const publisherRows = await db
+            .insert(publishers)
+            .values([
+                { name: 'Pub One', description: 'one' },
+                { name: 'Pub Two', description: 'two' },
+            ])
+            .returning({ id: publishers.id, name: publishers.name });
+        const strategy = categoryRows.find((row) => row.name === 'Strategy');
+        const puzzle = categoryRows.find((row) => row.name === 'Puzzle');
+        const publisherOne = publisherRows.find((row) => row.name === 'Pub One');
+        const publisherTwo = publisherRows.find((row) => row.name === 'Pub Two');
+        if (!strategy || !puzzle || !publisherOne || !publisherTwo) {
+            throw new Error('Expected test fixtures were not inserted');
+        }
+
+        await db.insert(games).values([
+            { title: 'Strategy One', description: 'one', starRating: 4, categoryId: strategy.id, publisherId: publisherOne.id },
+            { title: 'Puzzle One', description: 'two', starRating: 4.5, categoryId: puzzle.id, publisherId: publisherOne.id },
+            { title: 'Strategy Two', description: 'three', starRating: 3.5, categoryId: strategy.id, publisherId: publisherTwo.id },
+        ]);
+
+        const filtered = await getFilteredGames(db, {
+            categoryIds: [strategy.id],
+            publisherIds: [publisherOne.id],
+        });
+        expect(filtered.map((game) => game.title)).toEqual(['Strategy One']);
+    });
+
+    it('returns catalog count and average rated value', async () => {
+        await seedGames(db, 2);
+        const summary = await getCatalogSummary(db);
+        expect(summary).toEqual({ gameCount: 2, averageRating: 4.2 });
+    });
+
+    it('returns a null average when the catalog has no games', async () => {
+        await expect(getCatalogSummary(db)).resolves.toEqual({
+            gameCount: 0,
+            averageRating: null,
+        });
     });
 });

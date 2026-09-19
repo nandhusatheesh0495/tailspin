@@ -24,4 +24,29 @@ test.describe('Home Page', () => {
     // Check that the welcome message is present using more specific locator
     await expect(page.getByText('Find your next game! And maybe even back one! Explore our collection!')).toBeVisible();
   });
+
+  test('should display the catalog summary', async ({ page }) => {
+    await expect(page.getByTestId('catalog-game-count')).toContainText(/\d+/);
+    await expect(page.getByTestId('catalog-average-rating')).toContainText(/\/ 5|Not yet rated/);
+  });
+
+  test('should filter games by category and publisher', async ({ page }) => {
+    const categoryFilter = page.getByTestId('category-filter');
+    const publisherFilter = page.getByTestId('publisher-filter');
+    const categoryOption = categoryFilter.locator('option').first();
+    const publisherOption = publisherFilter.locator('option').first();
+    const totalCards = await page.getByTestId('game-card').count();
+
+    await categoryFilter.selectOption(await categoryOption.getAttribute('value'));
+    await publisherFilter.selectOption(await publisherOption.getAttribute('value'));
+
+    const visibleCards = page.locator('[data-testid="game-card"]:not([hidden])');
+    await expect(visibleCards.first()).toBeVisible();
+    const filteredCardCount = await visibleCards.count();
+    expect(filteredCardCount).toBeLessThan(totalCards);
+    await expect(page.getByTestId('no-filter-results')).toBeHidden();
+
+    await page.getByTestId('reset-filters').click();
+    await expect(page.getByTestId('game-card').first()).toBeVisible();
+  });
 });

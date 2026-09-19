@@ -25,3 +25,15 @@ export interface Game {
     category: Category | null;
     starRating: number | null;
 }
+
+/** Aggregate statistics shown for the game catalog. */
+export interface CatalogSummary {
+    gameCount: number;
+    averageRating: number | null;
+}
+
+/** Optional category and publisher filters for game listings. */
+export interface GameFilters {
+    categoryIds?: number[];
+    publisherIds?: number[];
+}
