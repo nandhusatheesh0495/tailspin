@@ -1,7 +1,7 @@
-import { eq, asc } from 'drizzle-orm';
+import { and, asc, avg, count, eq, inArray } from 'drizzle-orm';
 import type { Database } from './db';
 import { games, categories, publishers } from '../../db/schema';
-import type { Game } from '../types/game';
+import type { CatalogSummary, Category, Game, GameFilters, Publisher } from '../types/game';
 
 const gameSelection = {
     id: games.id,
@@ -52,8 +52,47 @@ function baseGamesQuery(db: Database) {
 
 /** All games ordered by title. */
 export async function getAllGames(db: Database): Promise<Game[]> {
-    const rows = await baseGamesQuery(db).orderBy(asc(games.title));
+    return getFilteredGames(db, {});
+}
+
+/** Games matching the selected category and publisher ids, ordered by title. */
+export async function getFilteredGames(db: Database, filters: GameFilters): Promise<Game[]> {
+    const conditions = [];
+    if (filters.categoryIds && filters.categoryIds.length > 0) {
+        conditions.push(inArray(games.categoryId, filters.categoryIds));
+    }
+    if (filters.publisherIds && filters.publisherIds.length > 0) {
+        conditions.push(inArray(games.publisherId, filters.publisherIds));
+    }
+
+    const rows = await baseGamesQuery(db)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(asc(games.title));
     return rows.map(mapGame);
+}
+
+/** All categories ordered by name. */
+export async function getAllCategories(db: Database): Promise<Category[]> {
+    return db.select({ id: categories.id, name: categories.name }).from(categories).orderBy(asc(categories.name));
+}
+
+/** All publishers ordered by name. */
+export async function getAllPublishers(db: Database): Promise<Publisher[]> {
+    return db.select({ id: publishers.id, name: publishers.name }).from(publishers).orderBy(asc(publishers.name));
+}
+
+/** Catalog size and average of the available star ratings. */
+export async function getCatalogSummary(db: Database): Promise<CatalogSummary> {
+    const [row] = await db
+        .select({ gameCount: count(games.id), averageRating: avg(games.starRating) })
+        .from(games);
+
+    return {
+        gameCount: Number(row?.gameCount ?? 0),
+        averageRating: row?.averageRating === null || row?.averageRating === undefined
+            ? null
+            : Number(row.averageRating),
+    };
 }
 
 /** All game ids ordered by title. */
